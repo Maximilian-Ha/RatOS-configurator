@@ -1,2 +1,17 @@
 # This file lists the Python package dependencies for RatOS Klipper extensions
 pygam==0.9.1
+
+# RatOS-Kalico: pygam 0.9.1 caps scipy at <1.12, and no scipy below 1.12 supports
+# numpy 2 -- so pygam transitively forbids it. That constraint is only
+# visible inside pygam's metadata, which no installer here preserves, and
+# four separate pip runs write this venv. State it explicitly so every one
+# of them converges on the same working set instead of fighting.
+#
+# The fork's Kalico branch holds numpy below 2 to match. Both files have
+# to agree; changing one alone reintroduces the ping-pong.
+#
+# To move to numpy 2 later: a pygam that allows scipy >= 1.13 is needed.
+# pygam's main branch declares 0.10.1 with scipy<1.17, but no such release
+# is tagged, so verify it exists on PyPI from the printer before trying.
+numpy>=1.26.4,<2
+scipy>=1.11.1,<1.12
