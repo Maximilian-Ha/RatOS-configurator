@@ -595,6 +595,18 @@ checkout_target_branch()
         created_temp_branch=true
     fi
 
+    # RatOS-Kalico: Kalico tracks klippy/extras/gcode_shell_command.py, which RatOS
+    # symlinks. If that symlink is not in .git/info/exclude, the checkout
+    # below refuses to overwrite it and this script returns 6 -- on every
+    # update, forever. The fork cedes this file to Kalico anyway (see
+    # ratos-common.sh), so drop the link and let the checkout supply the
+    # real file. -L means this can never delete anything but a symlink,
+    # and never the source in printer_data.
+    if [ -L "$KLIPPER_DIR/klippy/extras/gcode_shell_command.py" ]; then
+        log_info "Removing RatOS' gcode_shell_command.py symlink; Kalico ships its own." "checkout_branch"
+        rm -f "$KLIPPER_DIR/klippy/extras/gcode_shell_command.py"
+    fi
+
     # Check if target branch already exists locally
     if run_git -C "$KLIPPER_DIR" show-ref --verify --quiet "refs/heads/$TARGET_BRANCH"; then
         log_info "Local branch '$TARGET_BRANCH' already exists, switching to it..." "checkout_branch"
