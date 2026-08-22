@@ -595,17 +595,20 @@ checkout_target_branch()
         created_temp_branch=true
     fi
 
-    # RatOS-Kalico: Kalico tracks klippy/extras/gcode_shell_command.py, which RatOS
-    # symlinks. If that symlink is not in .git/info/exclude, the checkout
-    # below refuses to overwrite it and this script returns 6 -- on every
-    # update, forever. The fork cedes this file to Kalico anyway (see
-    # ratos-common.sh), so drop the link and let the checkout supply the
-    # real file. -L means this can never delete anything but a symlink,
-    # and never the source in printer_data.
-    if [ -L "$KLIPPER_DIR/klippy/extras/gcode_shell_command.py" ]; then
-        log_info "Removing RatOS' gcode_shell_command.py symlink; Kalico ships its own." "checkout_branch"
-        rm -f "$KLIPPER_DIR/klippy/extras/gcode_shell_command.py"
-    fi
+    # RatOS-Kalico: Kalico tracks these paths in klippy/extras, and RatOS or a
+    # third-party addon may have symlinked its own copy over them. A
+    # symlink that is not in .git/info/exclude makes the checkout below
+    # refuse to overwrite it, and this script then returns 6 -- on every
+    # update, forever. The fork cedes these files to Kalico anyway, so
+    # drop the links and let the checkout supply the real ones. -L means
+    # only a symlink can ever be removed, never a real file, and never
+    # the source in printer_data.
+    for _ratos_kalico_owned in gcode_shell_command.py belay.py; do
+        if [ -L "$KLIPPER_DIR/klippy/extras/$_ratos_kalico_owned" ]; then
+            log_info "Removing $_ratos_kalico_owned symlink; Kalico ships its own." "checkout_branch"
+            rm -f "$KLIPPER_DIR/klippy/extras/$_ratos_kalico_owned"
+        fi
+    done
 
     # Check if target branch already exists locally
     if run_git -C "$KLIPPER_DIR" show-ref --verify --quiet "refs/heads/$TARGET_BRANCH"; then
