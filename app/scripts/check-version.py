@@ -7,15 +7,27 @@
 import sys
 import os
 KLIPPER_DIR = os.path.abspath(os.environ['KLIPPER_DIR'])
-sys.path.append(os.path.join(KLIPPER_DIR, "klippy"))
 import argparse
 import logging
 import time
 import traceback
-import reactor
-import serialhdl
-import clocksync
-import mcu
+
+# RatOS-Kalico: Kalico made klippy a package, and its modules import each other
+# relatively -- reactor.py opens with `from . import chelper, util`.
+# Appending klippy/ to sys.path and importing them flat therefore raises
+# "attempted relative import with no known parent package", which the
+# configurator surfaces as a failed mcu.boardVersion call. Put the
+# klipper root on the path so `klippy` resolves as the package it is,
+# and keep the flat layout as a fallback for stock Klipper.
+if os.path.isfile(os.path.join(KLIPPER_DIR, "klippy", "__init__.py")):
+    sys.path.insert(0, KLIPPER_DIR)
+    from klippy import reactor, serialhdl, clocksync, mcu
+else:
+    sys.path.append(os.path.join(KLIPPER_DIR, "klippy"))
+    import reactor
+    import serialhdl
+    import clocksync
+    import mcu
 
 ###########################################################
 #
