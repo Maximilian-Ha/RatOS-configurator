@@ -256,7 +256,10 @@ verify_registered_extensions()
     # Define expected extensions and their relative paths
     declare -A expected_extensions=(
         ["beacon"]=$(realpath "${BEACON_DIR}/beacon.py")
-        ["gcode_shell_extension"]=$(realpath "${RATOS_PRINTER_DATA_DIR}/config/RatOS/klippy/gcode_shell_command.py")
+        # RatOS-Kalico: Kalico ships klippy/extras/gcode_shell_command.py itself and
+        # tracks it in git, so RatOS' symlink is clobbered by every
+        # `git reset --hard` -- silently, because the verifier only checks
+        # the source path. Cede the file to Kalico rather than fight it.
         ["ratos_homing_extension"]=$(realpath "${RATOS_PRINTER_DATA_DIR}/config/RatOS/klippy/ratos_homing.py")
 		["linear_movement_analysis"]=$(realpath "${RATOS_USER_HOME}/klipper_linear_movement_analysis/linear_movement_vibrations.py")
         ["z_offset_probe_extension"]=$(realpath "${RATOS_PRINTER_DATA_DIR}/config/RatOS/klippy/z_offset_probe.py")

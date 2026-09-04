@@ -17,6 +17,9 @@ class RatOSHybridCoreXYKinematics:
         if config.has_section('ratos_hybrid_corexy'):
             hcxy_config = config.getsection('ratos_hybrid_corexy')
             self.inverted = hcxy_config.getboolean('inverted', False)
+        # RatOS-Kalico: Kalico's toolhead refuses [dual_carriage] unless the
+        # kinematics declares support, and reads it unguarded.
+        self.supports_dual_carriage = True
         # itersolve parameters
         self.rails = [stepper.LookupMultiRail(config.getsection('stepper_' + n))
                       for n in 'xyz']
@@ -99,18 +102,29 @@ class RatOSHybridCoreXYKinematics:
         # otherwise leave in un-homed state.
         if l <= h:
             self.limits[i] = range
-    def set_position(self, newpos, homing_axes):
-        for i, rail in enumerate(self.rails):
+    def set_position(self, newpos, homing_axes=""):
+        for rail in self.rails:
             rail.set_position(newpos)
-            for axis in homing_axes:
-                if self.dc_module and axis == self.dc_module.axis:
-                    rail = self.dc_module.get_primary_rail().get_rail()
-                else:
-                    rail = self.rails[axis]
-                self.limits[axis] = rail.get_range()
+        # RatOS-Kalico: Kalico passes axis names ('xyz'), Klipper passes indices.
+        # Accept both, and set the limits once per homed axis rather
+        # than once per axis per rail.
+        for axis in homing_axes:
+            if isinstance(axis, str):
+                axis = "xyz".index(axis)
+            if self.dc_module and axis == self.dc_module.axis:
+                rail = self.dc_module.get_primary_rail().get_rail()
+            else:
+                rail = self.rails[axis]
+            self.limits[axis] = rail.get_range()
+    # RatOS-Kalico: Kalico calls this from stepper_enable.motor_off (every M84),
+    # from force_move's SET_KINEMATIC_POSITION and from safe_z_home.
+    def clear_homing_state(self, clear_axes):
+        for axis, axis_name in enumerate("xyz"):
+            if axis_name in clear_axes:
+                self.limits[axis] = (1.0, -1.0)
     def note_z_not_homed(self):
-        # Helper for Safe Z Home
-        self.limits[2] = (1.0, -1.0)
+        # Helper for Safe Z Home (pre-Kalico Klipper API)
+        self.clear_homing_state("z")
     def home_axis(self, homing_state, axis, rail):
         position_min, position_max = rail.get_range()
         hi = rail.get_homing_info()

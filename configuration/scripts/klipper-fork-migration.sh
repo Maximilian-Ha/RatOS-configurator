@@ -161,14 +161,35 @@ run_git() {
     fi
 }
 
+# RatOS-Kalico: upstream compares origin URLs byte-exactly, so a clone made
+# without the trailing .git (or with a trailing slash, or in different
+# case) is rejected as an unsupported source and every future update
+# fails. Normalize both sides before comparing.
+normalize_git_url() {
+    local u="${1:-}"
+    u="${u%/}"
+    u="${u%.git}"
+    printf "%s" "${u,,}"
+}
+
 # Migration constants (readonly to prevent accidental modification)
-readonly OFFICIAL_KLIPPER_URL="https://github.com/Klipper3d/klipper.git"
-readonly RATOS_FORK_URL="https://github.com/Rat-OS/klipper.git"
+# RatOS-Kalico: the 'official' upstream is now Kalico.
+readonly OFFICIAL_KLIPPER_URL="https://github.com/KalicoCrew/kalico.git"
+readonly RATOS_FORK_URL="https://github.com/Maximilian-Ha/kalico.git"
 readonly DEPRECATED_FORK_URLS=(
 	"https://github.com/tg73/klipper.git" # tg73 fork sometimes used during development
+	# RatOS-Kalico: accept the pre-fork Klipper origins so already-deployed
+	# RatOS 2.1 machines migrate forward instead of aborting.
+	"https://github.com/Klipper3d/klipper.git"
+	"git@github.com:Klipper3d/klipper.git"
+	"ssh://git@github.com/Klipper3d/klipper.git"
+	"git://github.com/Klipper3d/klipper.git"
+	"https://github.com/Rat-OS/klipper.git"
+	"git@github.com:Rat-OS/klipper.git"
+	"ssh://git@github.com/Rat-OS/klipper.git"
 )
-readonly RATOS_FORK_REMOTE="ratos-fork"
-readonly TARGET_BRANCH="ratos/v2.1.x"
+readonly RATOS_FORK_REMOTE="ratos-kalico"
+readonly TARGET_BRANCH="ratos-kalico/v2.1.x"
 readonly MOONRAKER_CONF_PATH="$SCRIPT_DIR/../moonraker.conf"
 
 # extract_target_commit_from_moonraker() - Dynamically extracts klipper pinned_commit from moonraker.conf
@@ -329,16 +350,16 @@ check_klipper_repository()
 
     # Define all valid official Klipper repository URL formats
     local official_urls=(
-        "$OFFICIAL_KLIPPER_URL"                              # HTTPS
-        "git@github.com:Klipper3d/klipper.git"              # SSH shorthand
-        "ssh://git@github.com/Klipper3d/klipper.git"        # SSH protocol
-        "git://github.com/Klipper3d/klipper.git"            # Git protocol
+        "$OFFICIAL_KLIPPER_URL"                       # HTTPS
+        "git@github.com:KalicoCrew/kalico.git"        # SSH shorthand
+        "ssh://git@github.com/KalicoCrew/kalico.git"  # SSH protocol
+        "git://github.com/KalicoCrew/kalico.git"      # Git protocol
     )
 
     # Check if current origin is official Klipper repository
     local is_official_repo=false
     for official_url in "${official_urls[@]}"; do
-        if [[ "$current_origin" == "$official_url" ]]; then
+        if [[ "$(normalize_git_url "$current_origin")" == "$(normalize_git_url "$official_url")" ]]; then
             is_official_repo=true
             break
         fi
@@ -353,7 +374,7 @@ check_klipper_repository()
 	# Check if current origin is a deprecated RatOS fork URL
 	local is_deprecated_fork=false
 	for deprecated_url in "${DEPRECATED_FORK_URLS[@]}"; do
-		if [[ "$current_origin" == "$deprecated_url" ]]; then
+		if [[ "$(normalize_git_url "$current_origin")" == "$(normalize_git_url "$deprecated_url")" ]]; then
 			is_deprecated_fork=true
 			break
 		fi
@@ -366,7 +387,7 @@ check_klipper_repository()
 	fi
 
     # Check if current origin is RatOS fork
-    if [[ "$current_origin" == "$RATOS_FORK_URL" ]]; then
+    if [[ "$(normalize_git_url "$current_origin")" == "$(normalize_git_url "$RATOS_FORK_URL")" ]]; then
         log_info "Repository is using RatOS fork, checking current state..." "check_repository"
 
         # Get current HEAD commit
@@ -573,6 +594,21 @@ checkout_target_branch()
         fi
         created_temp_branch=true
     fi
+
+    # RatOS-Kalico: Kalico tracks these paths in klippy/extras, and RatOS or a
+    # third-party addon may have symlinked its own copy over them. A
+    # symlink that is not in .git/info/exclude makes the checkout below
+    # refuse to overwrite it, and this script then returns 6 -- on every
+    # update, forever. The fork cedes these files to Kalico anyway, so
+    # drop the links and let the checkout supply the real ones. -L means
+    # only a symlink can ever be removed, never a real file, and never
+    # the source in printer_data.
+    for _ratos_kalico_owned in gcode_shell_command.py belay.py; do
+        if [ -L "$KLIPPER_DIR/klippy/extras/$_ratos_kalico_owned" ]; then
+            log_info "Removing $_ratos_kalico_owned symlink; Kalico ships its own." "checkout_branch"
+            rm -f "$KLIPPER_DIR/klippy/extras/$_ratos_kalico_owned"
+        fi
+    done
 
     # Check if target branch already exists locally
     if run_git -C "$KLIPPER_DIR" show-ref --verify --quiet "refs/heads/$TARGET_BRANCH"; then

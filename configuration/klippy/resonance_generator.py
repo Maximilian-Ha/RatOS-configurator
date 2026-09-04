@@ -6,6 +6,8 @@
 # Modified by Mikkel Schmidt to generate resonances at a static frequency 
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
+import inspect
+
 from toolhead import ToolHead
 from . import resonance_tester
 
@@ -29,7 +31,10 @@ class VibrationGenerator:
         toolhead = self.printer.lookup_object('toolhead')
         if not isinstance(toolhead, ToolHead):
             raise gcmd.error("Toolhead is not available")
-        X, Y, Z, E = toolhead.get_position()
+        # RatOS-Kalico: Kalico's toolhead can carry extra axes beyond X/Y/Z/E, so
+        # keep the whole vector and only name the three we move.
+        pos = list(toolhead.get_position())
+        X, Y, Z = pos[:3]
         sign = 1.
         freq = self.freq
         # Override maximum acceleration and min cruise ratio 
@@ -62,8 +67,9 @@ class VibrationGenerator:
             dX, dY = axis.get_point(L)
             nX = X + sign * dX
             nY = Y + sign * dY
-            toolhead.move([nX, nY, Z, E], max_v)
-            toolhead.move([X, Y, Z, E], max_v)
+            # RatOS-Kalico: carry every axis past Y at its current value.
+            toolhead.move([nX, nY] + pos[2:], max_v)
+            toolhead.move(list(pos), max_v)
             sign = -sign
             run_time_seconds += 2. * t_seg
 
@@ -126,7 +132,21 @@ class ResonanceGenerator:
 
             # Generate moves
             test_seq = self.generator.gen_test()
-            self.executor.run_test(test_seq, axis, gcmd)
+            # RatOS-Kalico: Kalico widened run_test to
+            # (test_seq, axis, freq_end, accel_per_hz, gcmd). Its
+            # suspend_limits() wrapper is what disables the input shaper
+            # and raises the accel limits for the sweep, so the public
+            # form is required -- calling the private _run_test would
+            # measure with shaping still on.
+            if len(
+                inspect.signature(self.executor.run_test).parameters
+            ) > 3:
+                _vg = self.generator.vibration_generator
+                self.executor.run_test(
+                    test_seq, axis, _vg.freq_end, _vg.accel_per_hz, gcmd
+                )
+            else:
+                self.executor.run_test(test_seq, axis, gcmd)
 
 		# Sync the toolhead position to the printer position by using the _SYNC_GCODE_POSITION command in ratos.py.
         self.gcode.run_script_from_command("_SYNC_GCODE_POSITION")

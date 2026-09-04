@@ -1,0 +1,86 @@
+#############################################################################################################
+### printer.cfg overrides for the V-Core 4.1 IDEX 600
+###
+### These three things CANNOT be expressed in printer-definition.json, because
+### the shared template v-core-4-1-idex.ts emits them *after* the size include
+### and therefore wins over 600.cfg. printer.cfg is included at the top of the
+### generated config, so its sections come last and do win.
+###
+### Paste this into your printer.cfg, below [include RatOS.cfg].
+#############################################################################################################
+
+#------------------------------------------------------------------------------------------------------------
+# 1) VAOC camera positions
+#
+# The template computes these from the size:
+#     xcontrolpoint = size.x / 2 - 37.5   ->  262.5
+#     ycontrolpoint = size.y + 30.5       ->  630.5
+#
+# The +30.5 is hardcoded against the stock bedMargin.y[1] of 33.65. This machine
+# has bedMargin.y[1] = 65, so the computed Y lands ~32mm short of the real
+# camera. These are per-machine calibration values anyway - keep them here.
+#------------------------------------------------------------------------------------------------------------
+[gcode_macro _VAOC]
+variable_expected_camera_x_position: 265.380
+variable_expected_camera_y_position: 662.253
+
+#------------------------------------------------------------------------------------------------------------
+# 2) Z minimum
+#
+# The template hardcodes `min: -7` for the Z rail. This machine uses -5.
+#------------------------------------------------------------------------------------------------------------
+[stepper_z]
+position_min: -5
+
+#------------------------------------------------------------------------------------------------------------
+# 3) IDEX carriage safe distance
+#
+# The template hardcodes `safeDistance: 55`. This machine uses 60.
+#------------------------------------------------------------------------------------------------------------
+[dual_carriage]
+safe_distance: 60
+
+#------------------------------------------------------------------------------------------------------------
+# 4) T1 parking position (optional)
+#
+# The configurator computes this as size.x + bedMargin.x[1] - 2 = 673, which is
+# 1mm past the 672 currently running on the machine. Uncomment if 673 is too
+# close to the endstop. T0 needs no override: -bedMargin.x[0] + 2 = -73 already
+# matches exactly.
+#------------------------------------------------------------------------------------------------------------
+#[gcode_macro T1]
+#variable_parking_position: 672
+
+#------------------------------------------------------------------------------------------------------------
+# 5) Service macros (optional, not overrides)
+#
+# maintenance.cfg, next to this file, defines four macros Mainsail lists as
+# buttons:
+#
+#   MAINTENANCE_MODE   bed to mid height (Z327.5), gantry to the front (Y4),
+#                      both toolheads centred (T0 X265 / T1 X335 -- they
+#                      straddle the centre line because safe_distance is 60mm)
+#   MAINTENANCE_END    G28, bed to Z20, gantry to the back (Y585), both
+#                      toolheads parked. Refuses to re-home above 60C: a hot
+#                      nozzle oozes into the Z reference G28 takes above the bed
+#   NOZZLE_CHANGE      presents one nozzle 200mm in from its parking position
+#                      (T0 X127 / T1 X473) at 300C, with a 15 minute timeout
+#   NOZZLE_CHANGE_END  heater off, timeout cancelled
+#   LUBE_X/Y/Z         guided greasing: three stations per axis to apply grease
+#                      at, then sweeps to spread it. Continue with the dialog's
+#                      button or by typing LUBE_NEXT; LUBE_ABORT drops the run.
+#                      Stations are derived from the axis limits, not hardcoded
+#   LUBE_STATUS        when each axis was last greased and how many PRINT hours
+#                      ago. The hours are counted by a delayed_gcode and kept in
+#                      save_variables; the calendar date comes from two shell
+#                      commands, because a macro cannot read a clock
+#   LUBE_MARK          records a greasing you did by hand (AXIS=X|Y|Z|ALL)
+#
+# They are not included by anything. Add this line to printer.cfg, below
+# [include RatOS.cfg]:
+#
+#     [include RatOS/printers/v-core-4-1-idex-600/maintenance.cfg]
+#
+# On a machine that is not on the 600 printer type yet, that path does not
+# exist -- paste the contents of maintenance.cfg into printer.cfg instead.
+#------------------------------------------------------------------------------------------------------------
