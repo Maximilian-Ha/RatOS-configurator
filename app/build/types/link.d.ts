@@ -33,14 +33,14 @@ declare namespace __next_route_internal_types__ {
     | `/api/download-firmware`
     | `/api/mcu-image`
     | `/api/printer-image`
-    | `/api/update-logs/generate-test-data`
     | `/api/update-logs/download`
+    | `/api/update-logs/generate-test-data`
     | `/`
     | `/calibration`
     | `/motion`
+    | `/toolhead`
     | `/update-logs`
     | `/wizard`
-    | `/toolhead`
     | `/analysis/macros/new`
     | `/analysis/macros`
     | `/analysis`
