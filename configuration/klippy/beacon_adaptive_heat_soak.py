@@ -284,6 +284,13 @@ class BeaconAdaptiveHeatSoak:
 		# The default minimum wait time in seconds for the printer to reach thermal stability.
 		self.def_minimum_wait = config.getint('default_minimum_wait', 0, minval=0)
 
+		# RatOS-Kalico: seconds between console progress reports while the soak
+		# runs. 0 disables them. Override in printer.cfg with
+		#     [beacon_adaptive_heat_soak]
+		#     console_report_interval: 300
+		# placed after the RatOS includes, or per call with REPORT_INTERVAL=.
+		self.def_console_report_interval = config.getint('console_report_interval', 300, minval=0)
+
 		# TODO: Make trend checks configurable.
 
 		# Setup
@@ -429,6 +436,9 @@ class BeaconAdaptiveHeatSoak:
 		layer_quality = gcmd.get_int('LAYER_QUALITY', self.def_layer_quality, minval=1, maxval=5)
 		maximum_first_layer_duration = max(60, min(7200, gcmd.get_int('MAXIMUM_FIRST_LAYER_DURATION', self.def_maximum_first_layer_duration, minval=0)))
 
+		# RatOS-Kalico: per-call override of the console report cadence.
+		console_report_interval = gcmd.get_int('REPORT_INTERVAL', self.def_console_report_interval, minval=0)
+
 		params_msg = ''
 		threshold_origin = "forced" if threshold is not None else "predicted"
 
@@ -507,6 +517,8 @@ class BeaconAdaptiveHeatSoak:
 				progress_start_z_rate = None
 				progress_z_rate_range = None
 				progress_on_final_approach = False
+				# RatOS-Kalico: elapsed time at which the next console report is due.
+				next_console_report = float(console_report_interval)
 
 				while True:
 					if self.reactor.monotonic() - start_time > maximum_wait:
@@ -629,6 +641,23 @@ class BeaconAdaptiveHeatSoak:
 								f"min_wait_satisfied={min_wait_satisfied}, threshold={threshold:.2f} nm/s")
 					elif should_log:
 						logging.info(f"{self.name}: elapsed={elapsed:.1f} s, waiting for first moving average to be available...")
+
+					# RatOS-Kalico: same numbers as the logging.info calls above, on the
+					# console, throttled to console_report_interval. Sits at loop level so
+					# it also reports during the first few minutes, before the first moving
+					# average exists and there is otherwise nothing at all to see.
+					if console_report_interval and elapsed >= next_console_report:
+						next_console_report = elapsed + console_report_interval
+						if moving_average is None:
+							gcmd.respond_info(
+								f"Heat soak: {self._format_seconds(elapsed)} elapsed, still collecting the "
+								f"first Z-rate average (takes about {self._format_seconds(estimated_time_to_first_moving_average)}), "
+								f"target <= {threshold:.2f} nm/s.")
+						else:
+							gcmd.respond_info(
+								f"Heat soak: {self._format_seconds(elapsed)} elapsed, {progress_handler.progress * 100.0:.1f}%, "
+								f"Z-rate {moving_average:.2f} nm/s, target <= {threshold:.2f} nm/s, "
+								f"steady {moving_average_hold_count}/{moving_average_target_hold_count}.")
 		finally:
 			if progress_handler is not None:
 				progress_handler.disable()

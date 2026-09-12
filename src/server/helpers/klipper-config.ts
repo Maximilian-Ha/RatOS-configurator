@@ -776,6 +776,13 @@ export const constructKlipperConfigHelpers = async (
 					section.push(`sense_resistor: ${rail.driver.senseResistor}`);
 				}
 			}
+			// RatOS-Kalico: Kalico makes rref mandatory for TMC2240 where Klipper
+			// defaulted it to 12000. Without this the generated config does
+			// not load at all. 12000 is what Klipper's default meant, so this
+			// reproduces the current the machine already runs.
+			if (rail.driver.type === 'TMC2240' && !section.some((l) => l.startsWith('rref:'))) {
+				section.push(`rref: 12000`);
+			}
 			return section.join('\n') + '\n';
 		},
 		renderSpeedLimits() {
